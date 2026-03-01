@@ -1,7 +1,7 @@
 import { R2 } from "@convex-dev/r2";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
-import { getCurrentUser } from "./auth";
+import { getCurrentUser } from "./authHelpers";
 
 // ── R2 file storage ─────────────────────────────────────────────────
 // Handles presigned URLs and metadata sync for Cloudflare R2.

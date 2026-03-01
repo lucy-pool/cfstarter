@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "./auth";
+import { requireAuth } from "./authHelpers";
 
 // ── Demo CRUD — shows the basic Convex patterns ─────────────────────
 // Replace this file with your own feature modules.

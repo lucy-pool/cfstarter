@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider, ThemeProvider } from "@/components/providers";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
@@ -7,7 +7,7 @@ import "./globals.css";
 // TODO: Change "My App" to your app name (see APP_NAME in src/lib/utils.ts)
 export const metadata: Metadata = {
   title: "My App",
-  description: "Built with Convex, Next.js, and Clerk",
+  description: "Built with Convex and Next.js",
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ConvexAuthNextjsServerProvider>
       <ConvexClientProvider>
         <html lang="en" suppressHydrationWarning>
           <body>
@@ -27,6 +27,6 @@ export default function RootLayout({
           </body>
         </html>
       </ConvexClientProvider>
-    </ClerkProvider>
+    </ConvexAuthNextjsServerProvider>
   );
 }

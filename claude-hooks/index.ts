@@ -127,7 +127,7 @@ const CLIENT_ONLY_PACKAGES = [
   "react",
   "react-dom",
   "next",
-  "@clerk/nextjs",
+  "@convex-dev/auth/react",
   "@radix-ui",
   "lucide-react",
   "class-variance-authority",

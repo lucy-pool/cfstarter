@@ -1,26 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { api } from "../../../convex/_generated/api";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const router = useRouter();
   const user = useQuery(
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip"
   );
 
   useEffect(() => {
-    if (isAuthenticated) {
-      getOrCreateUser().catch(() => {
-        // User provisioning failed - will retry on next mount
-      });
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/signin");
     }
-  }, [isAuthenticated, getOrCreateUser]);
+  }, [isLoading, isAuthenticated, router]);
 
   if (isLoading || !isAuthenticated || user === undefined || user === null) {
     return (

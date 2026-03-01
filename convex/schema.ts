@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 // ── Role values ─────────────────────────────────────────────────────
 // Update these when you add your own roles.
@@ -23,16 +24,18 @@ export const messageRoleValidator = v.union(
 );
 
 export default defineSchema({
+  ...authTables,
   users: defineTable({
-    clerkId: v.string(),
     name: v.optional(v.string()),
-    email: v.string(),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    image: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
-    roles: v.array(roleValidator),
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    roles: v.optional(v.array(roleValidator)),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
   })
-    .index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"]),
 
   // ── File storage metadata ───────────────────────────────────────

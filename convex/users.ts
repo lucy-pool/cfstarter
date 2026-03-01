@@ -1,18 +1,20 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { roleValidator } from "./schema";
-import { getCurrentUser as getAuthUser, requireAuth, requireAdmin } from "./auth";
+import { getCurrentUser as getAuthUser, requireAuth, requireAdmin } from "./authHelpers";
 
 const userValidator = v.object({
   _id: v.id("users"),
   _creationTime: v.number(),
-  clerkId: v.string(),
   name: v.optional(v.string()),
-  email: v.string(),
+  email: v.optional(v.string()),
+  emailVerificationTime: v.optional(v.number()),
+  image: v.optional(v.string()),
   avatarUrl: v.optional(v.string()),
-  roles: v.array(roleValidator),
-  createdAt: v.number(),
-  updatedAt: v.number(),
+  roles: v.optional(v.array(roleValidator)),
+  createdAt: v.optional(v.number()),
+  updatedAt: v.optional(v.number()),
+  isAnonymous: v.optional(v.boolean()),
 });
 
 /** Get the current user (returns null if not signed in). */
@@ -25,42 +27,6 @@ export const getCurrentUser = query({
     } catch {
       return null;
     }
-  },
-});
-
-/** Auto-provision a user record on first sign-in. */
-export const getOrCreateUser = mutation({
-  args: {},
-  returns: v.union(userValidator, v.null()),
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Authentication required");
-    }
-
-    const clerkId = identity.subject;
-
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-      .first();
-
-    if (existing) {
-      return existing;
-    }
-
-    const now = Date.now();
-    const userId = await ctx.db.insert("users", {
-      clerkId,
-      name: identity.name ?? undefined,
-      email: identity.email ?? "",
-      avatarUrl: identity.pictureUrl ?? undefined,
-      roles: ["user"],
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return await ctx.db.get(userId);
   },
 });
 
@@ -103,8 +69,8 @@ export const getAllUsers = query({
     v.object({
       _id: v.id("users"),
       name: v.optional(v.string()),
-      email: v.string(),
-      roles: v.array(roleValidator),
+      email: v.optional(v.string()),
+      roles: v.optional(v.array(roleValidator)),
     })
   ),
   handler: async (ctx) => {

@@ -5,7 +5,7 @@
 |-------|-----------|
 | Backend / DB | Convex (real-time, reactive, transactional) |
 | Frontend | Next.js 16 (App Router, `"use client"` pages) |
-| Auth | Clerk (JWT-based, synced to Convex `users` table) |
+| Auth | Convex Auth (`@convex-dev/auth` — Password, GitHub, Google OAuth) |
 | UI | shadcn/ui + Tailwind CSS |
 | Object Storage | Cloudflare R2 via `@convex-dev/r2` (presigned URLs, direct browser upload) |
 | AI / LLMs | OpenRouter (OpenAI-compatible chat completions) |
@@ -27,11 +27,13 @@
 
 ```
 convex/                          # Backend
-  schema.ts                      # Tables, indexes, role + fileType validators
-  auth.config.ts                 # Clerk JWT provider
-  auth.ts                        # Auth guards
-  users.ts                       # User CRUD + auto-provisioning
-  convex.config.ts                 # App definition — registers R2 component
+  schema.ts                      # Tables, indexes, role + fileType validators + authTables
+  auth.ts                        # Convex Auth provider config (Password, GitHub, Google)
+  auth.config.ts                 # Self-issued JWT config
+  authHelpers.ts                 # Auth guards (requireAuth, requireAdmin, hasRole)
+  http.ts                        # HTTP router — Convex Auth routes
+  users.ts                       # User CRUD (no auto-provisioning — Convex Auth handles it)
+  convex.config.ts               # App definition — registers R2 component
   files.ts                       # File metadata CRUD
   r2.ts                          # R2 client + clientApi exports (generateUploadUrl, syncMetadata)
   r2Actions.ts                   # "use node" — R2 presigned download URLs
@@ -40,15 +42,15 @@ convex/                          # Backend
   notes.ts                       # Demo CRUD (delete me)
 
 src/
-  proxy.ts                       # Clerk edge proxy — route protection (NOT middleware.ts)
+  proxy.ts                       # Convex Auth middleware — route protection
 
 src/app/                         # Frontend
-  layout.tsx                     # Root: ClerkProvider → ConvexClientProvider → Toaster
+  layout.tsx                     # Root: ConvexAuthNextjsServerProvider → ConvexClientProvider → Toaster
   page.tsx                       # Landing page
-  sign-in/[[...rest]]/page.tsx   # Clerk sign-in
-  sign-up/[[...rest]]/page.tsx   # Clerk sign-up
+  signin/page.tsx                # Sign-in (Password + OAuth)
+  signup/page.tsx                # Sign-up (Password + OAuth)
   (app)/                         # Protected route group
-    layout.tsx                   # Auth gate + user auto-provisioning
+    layout.tsx                   # Auth gate (redirects to /signin if unauthenticated)
     dashboard/page.tsx           # Welcome + demo links
     notes/page.tsx               # Demo: CRUD (delete me)
     files/page.tsx               # Demo: R2 upload (delete me)
@@ -56,12 +58,14 @@ src/app/                         # Frontend
     data-grid-demo/page.tsx      # Demo: DataGrid component showcase
 
 src/components/
-  providers.tsx                  # ConvexProviderWithClerk
+  providers.tsx                  # ConvexAuthProvider
   theme-toggle.tsx               # Dark/light mode toggle
+  auth/
+    user-menu.tsx                # User avatar + sign-out button
   layout/
     app-shell.tsx                # Sidebar + topbar + content area
     sidebar.tsx                  # Nav items array (extend here)
-    topbar.tsx                   # Clerk UserButton
+    topbar.tsx                   # UserMenu + ThemeToggle
   ui/                            # 16 shadcn/ui components + custom data-grid
     data-grid/                   # Custom DataGrid component (8 files)
 
@@ -156,21 +160,24 @@ Three layers of defense — all three must be maintained when adding or modifyin
 
 - Next.js 16 uses `proxy.ts` (NOT `middleware.ts` — that convention is deprecated)
 - Runs at the edge before any page code is served
-- Public routes: `/`, `/sign-in(.*)`, `/sign-up(.*)`
-- All other routes call `auth.protect()` which redirects unauthenticated users to sign-in
+- Uses `convexAuthNextjsMiddleware` from `@convex-dev/auth/nextjs/server`
+- Public routes: `/`, `/signin`, `/signup`, `/api/auth(.*)`
+- Unauthenticated users are redirected to `/signin`
 - **When adding a new public route**: add it to the `isPublicRoute` matcher in `src/proxy.ts`
 - **Default is deny** — new routes are protected automatically
 
 ### Layer 2: Client-Side Auth Gate (`src/app/(app)/layout.tsx`)
 
 - The `(app)` route group layout checks auth client-side as a fallback
+- Uses `useConvexAuth()` from `convex/react`
 - All protected pages live under `src/app/(app)/`
 - **Never put protected pages outside `(app)/`** without adding proxy + guard coverage
 
-### Layer 3: Convex Backend Guards (`convex/auth.ts`)
+### Layer 3: Convex Backend Guards (`convex/authHelpers.ts`)
 
 - **Every** query/mutation/action that accesses user data MUST call an auth guard
 - Available guards: `requireAuth(ctx)`, `requireAdmin(ctx)`, `hasRole(ctx, role)`
+- Guards use `getAuthUserId(ctx)` from `@convex-dev/auth/server`
 - Queries/mutations: call the guard at the top of the handler
 - Actions (`"use node"` files): call `ctx.auth.getUserIdentity()` and throw if `null`
 - **Never skip auth checks** — even if the frontend "should" prevent unauthenticated access, the backend must enforce it independently
@@ -197,7 +204,7 @@ Three layers of defense — all three must be maintained when adding or modifyin
 
 1. Add the literal to `ROLES` and `roleValidator` in `convex/schema.ts`
 2. Update the `roles` field validator in the `users` table
-3. Add a guard in `convex/auth.ts` (e.g. `requireEditor`)
+3. Add a guard in `convex/authHelpers.ts` (e.g. `requireEditor`)
 4. Update `convex/users.ts` `updateUserRoles` args validator
 
 ## Environment Variables
@@ -206,9 +213,10 @@ Three layers of defense — all three must be maintained when adding or modifyin
 |----------|----------|----------|
 | `CONVEX_DEPLOYMENT` | `.env.local` | Yes (auto-set) |
 | `NEXT_PUBLIC_CONVEX_URL` | `.env.local` | Yes (auto-set) |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `.env.local` | Yes |
-| `CLERK_SECRET_KEY` | `.env.local` | Yes |
-| `CLERK_JWT_ISSUER_DOMAIN` | Convex env | Yes |
+| `AUTH_GITHUB_ID` | Convex env | For GitHub OAuth |
+| `AUTH_GITHUB_SECRET` | Convex env | For GitHub OAuth |
+| `AUTH_GOOGLE_ID` | Convex env | For Google OAuth |
+| `AUTH_GOOGLE_SECRET` | Convex env | For Google OAuth |
 | `R2_ENDPOINT` | Convex env | For file uploads |
 | `R2_ACCESS_KEY_ID` | Convex env | For file uploads |
 | `R2_SECRET_ACCESS_KEY` | Convex env | For file uploads |
@@ -220,9 +228,17 @@ Three layers of defense — all three must be maintained when adding or modifyin
 
 ```bash
 bun install
-cp .env.example .env.local    # Fill in Clerk keys
+cp .env.example .env.local    # Fill in Convex URL
 bunx convex dev                # Terminal 1 — pushes schema
 bun dev                        # Terminal 2 — starts Next.js
+```
+
+For OAuth providers, set env vars in the Convex dashboard:
+```bash
+bunx convex env set AUTH_GITHUB_ID your-github-client-id
+bunx convex env set AUTH_GITHUB_SECRET your-github-client-secret
+bunx convex env set AUTH_GOOGLE_ID your-google-client-id
+bunx convex env set AUTH_GOOGLE_SECRET your-google-client-secret
 ```
 
 For R2/AI features, set env vars in the Convex dashboard:

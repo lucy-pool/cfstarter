@@ -1,20 +1,20 @@
 "use client";
 
-import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { Authenticated, Unauthenticated, useConvexAuth } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { APP_NAME } from "@/lib/utils";
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
+  const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isSignedIn) {
+    if (isAuthenticated) {
       router.replace("/dashboard");
     }
-  }, [isSignedIn, router]);
+  }, [isAuthenticated, router]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-primary px-6">
@@ -23,27 +23,27 @@ export default function Home() {
           {APP_NAME}
         </h1>
         <p className="mt-4 text-lg text-primary-foreground/70">
-          Your starter template with Convex, Next.js, and Clerk
+          Your starter template with Convex and Next.js
         </p>
 
-        <SignedOut>
+        <Unauthenticated>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/sign-in"
+              href="/signin"
               className="w-full sm:w-auto rounded-md bg-white px-6 py-3 text-primary font-medium hover:bg-white/90 transition-colors"
             >
               Sign In
             </Link>
             <Link
-              href="/sign-up"
+              href="/signup"
               className="w-full sm:w-auto rounded-md border border-primary-foreground/30 px-6 py-3 text-primary-foreground hover:bg-primary-foreground/10 transition-colors"
             >
               Sign Up
             </Link>
           </div>
-        </SignedOut>
+        </Unauthenticated>
 
-        <SignedIn>
+        <Authenticated>
           <div className="mt-10">
             <Link
               href="/dashboard"
@@ -52,7 +52,7 @@ export default function Home() {
               Go to Dashboard
             </Link>
           </div>
-        </SignedIn>
+        </Authenticated>
       </div>
     </div>
   );

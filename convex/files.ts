@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "./auth";
+import { requireAuth } from "./authHelpers";
 import { fileTypeValidator } from "./schema";
 import { r2 } from "./r2";
 

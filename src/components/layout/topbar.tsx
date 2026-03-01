@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { UserMenu } from "@/components/auth/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Topbar() {
@@ -11,7 +11,7 @@ export function Topbar() {
       </div>
       <div className="flex items-center gap-4">
         <ThemeToggle />
-        <UserButton afterSignOutUrl="/" />
+        <UserMenu />
       </div>
     </header>
   );

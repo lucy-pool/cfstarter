@@ -45,7 +45,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Roles:</span>
-              {user.roles.map((role: string) => (
+              {(user.roles ?? []).map((role: string) => (
                 <Badge key={role} variant="secondary">
                   {role}
                 </Badge>
