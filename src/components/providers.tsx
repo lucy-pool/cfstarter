@@ -1,29 +1,17 @@
 "use client";
 
-import { useAuthToken } from "@convex-dev/auth/react";
-import { ConvexReactClient, ConvexProviderWithAuth } from "convex/react";
+import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
+import { ConvexReactClient } from "convex/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { ReactNode, useMemo } from "react";
+import { ReactNode } from "react";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-function useAuth() {
-  const token = useAuthToken();
-  return useMemo(
-    () => ({
-      isLoading: false,
-      isAuthenticated: token !== null,
-      fetchAccessToken: async () => token,
-    }),
-    [token],
-  );
-}
-
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return (
-    <ConvexProviderWithAuth client={convex} useAuth={useAuth}>
+    <ConvexAuthNextjsProvider client={convex}>
       {children}
-    </ConvexProviderWithAuth>
+    </ConvexAuthNextjsProvider>
   );
 }
 
