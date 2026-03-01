@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+README.md
+SETUP.md
+CLAUDE.md
+.claude
+.agents
+memory
+claude-hooks
+skills-lock.json
+.mcp.json
