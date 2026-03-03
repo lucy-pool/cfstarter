@@ -23,6 +23,25 @@ export const messageRoleValidator = v.union(
   v.literal("assistant")
 );
 
+// ── Email values ────────────────────────────────────────────────────
+export const emailStatusValidator = v.union(
+  v.literal("queued"),
+  v.literal("sent"),
+  v.literal("failed"),
+  v.literal("bounced")
+);
+
+export const emailTemplateValidator = v.union(
+  v.literal("welcome"),
+  v.literal("password-reset"),
+  v.literal("email-verification"),
+  v.literal("magic-link"),
+  v.literal("team-invite"),
+  v.literal("notification"),
+  v.literal("account-deletion"),
+  v.literal("custom")
+);
+
 export default defineSchema({
   ...authTables,
   users: defineTable({
@@ -62,6 +81,47 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user", ["userId"]),
+
+  // ── Email logs ─────────────────────────────────────────────────
+  emailLogs: defineTable({
+    to: v.string(),
+    subject: v.string(),
+    template: emailTemplateValidator,
+    templateData: v.string(), // JSON string of template props
+    status: emailStatusValidator,
+    provider: v.optional(v.string()),
+    providerMessageId: v.optional(v.string()),
+    error: v.optional(v.string()),
+    sentAt: v.optional(v.number()),
+    sentBy: v.optional(v.id("users")),
+    customTemplateId: v.optional(v.id("emailTemplates")),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_template", ["template"])
+    .index("by_to", ["to"])
+    .index("by_created_at", ["createdAt"]),
+
+  // ── Custom email templates ─────────────────────────────────────
+  emailTemplates: defineTable({
+    name: v.string(),
+    label: v.string(),
+    subject: v.string(),
+    editorMode: v.union(v.literal("visual"), v.literal("html")),
+    contentJson: v.string(),        // Maily Tiptap JSON (used when editorMode === "visual")
+    contentHtml: v.optional(v.string()), // Raw HTML (used when editorMode === "html")
+    variables: v.array(v.object({
+      name: v.string(),
+      required: v.boolean(),
+      defaultValue: v.optional(v.string()),
+    })),
+    createdBy: v.id("users"),
+    updatedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_created_at", ["createdAt"]),
 
   // ── Demo table — replace with your own ──────────────────────────
   // Shows the basic pattern: table + indexes + validators.

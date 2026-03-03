@@ -13,7 +13,9 @@ export const generateDownloadUrl = action({
     storageKey: v.string(),
   },
   returns: v.string(),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Authentication required");
     return await r2.getUrl(args.storageKey);
   },
 });

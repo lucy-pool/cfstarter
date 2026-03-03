@@ -1,8 +1,7 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "./authHelpers";
 import { fileTypeValidator } from "./schema";
 import { r2 } from "./r2";
+import { userQuery, userMutation } from "./functions";
 
 // ── File metadata CRUD ──────────────────────────────────────────────
 // Stores metadata after a successful R2 upload.
@@ -21,7 +20,7 @@ const fileMetadataValidator = v.object({
 });
 
 /** Save file metadata after successful R2 upload. */
-export const storeFileMetadata = mutation({
+export const storeFileMetadata = userMutation({
   args: {
     fileName: v.string(),
     storageKey: v.string(),
@@ -31,48 +30,40 @@ export const storeFileMetadata = mutation({
   },
   returns: v.id("fileMetadata"),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
-
     return await ctx.db.insert("fileMetadata", {
       fileName: args.fileName,
       storageKey: args.storageKey,
       mimeType: args.mimeType,
       size: args.size,
       fileType: args.fileType,
-      createdBy: user._id,
+      createdBy: ctx.user._id,
       createdAt: Date.now(),
     });
   },
 });
 
 /** List the current user's files. */
-export const getMyFiles = query({
+export const getMyFiles = userQuery({
   args: {},
   returns: v.array(fileMetadataValidator),
   handler: async (ctx) => {
-    try {
-      const user = await requireAuth(ctx);
-      return await ctx.db
-        .query("fileMetadata")
-        .withIndex("by_created_by", (q) => q.eq("createdBy", user._id))
-        .collect();
-    } catch {
-      return [];
-    }
+    return await ctx.db
+      .query("fileMetadata")
+      .withIndex("by_created_by", (q) => q.eq("createdBy", ctx.user._id))
+      .collect();
   },
 });
 
 /** Delete file metadata and the R2 object (author only). */
-export const deleteFile = mutation({
+export const deleteFile = userMutation({
   args: {
     fileId: v.id("fileMetadata"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
     const file = await ctx.db.get(args.fileId);
     if (!file) throw new Error("File not found");
-    if (file.createdBy !== user._id) {
+    if (file.createdBy !== ctx.user._id) {
       throw new Error("Not authorized to delete this file");
     }
     await r2.deleteObject(ctx, file.storageKey);

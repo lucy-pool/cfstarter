@@ -1,7 +1,6 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "./authHelpers";
 import { messageRoleValidator } from "./schema";
+import { userQuery, userMutation } from "./functions";
 
 // ── AI message history ──────────────────────────────────────────────
 // Stores chat messages so conversations persist across page loads.
@@ -17,24 +16,19 @@ const aiMessageValidator = v.object({
 });
 
 /** List the current user's AI chat messages. */
-export const listMessages = query({
+export const listMessages = userQuery({
   args: {},
   returns: v.array(aiMessageValidator),
   handler: async (ctx) => {
-    try {
-      const user = await requireAuth(ctx);
-      return await ctx.db
-        .query("aiMessages")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .collect();
-    } catch {
-      return [];
-    }
+    return await ctx.db
+      .query("aiMessages")
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user._id))
+      .collect();
   },
 });
 
 /** Save a user or assistant message. */
-export const saveMessage = mutation({
+export const saveMessage = userMutation({
   args: {
     role: messageRoleValidator,
     content: v.string(),
@@ -42,10 +36,8 @@ export const saveMessage = mutation({
   },
   returns: v.id("aiMessages"),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
-
     return await ctx.db.insert("aiMessages", {
-      userId: user._id,
+      userId: ctx.user._id,
       role: args.role,
       content: args.content,
       model: args.model,
@@ -55,14 +47,13 @@ export const saveMessage = mutation({
 });
 
 /** Clear the current user's chat history. */
-export const clearHistory = mutation({
+export const clearHistory = userMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const user = await requireAuth(ctx);
     const messages = await ctx.db
       .query("aiMessages")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user._id))
       .collect();
 
     for (const msg of messages) {

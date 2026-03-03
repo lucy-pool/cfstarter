@@ -1,6 +1,5 @@
-import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "./authHelpers";
+import { userQuery, userMutation } from "./functions";
 
 // ── Demo CRUD — shows the basic Convex patterns ─────────────────────
 // Replace this file with your own feature modules.
@@ -17,15 +16,13 @@ const noteValidator = v.object({
 });
 
 /** List notes visible to the current user (own + public). */
-export const list = query({
+export const list = userQuery({
   args: {},
   returns: v.array(noteValidator),
   handler: async (ctx) => {
-    const user = await requireAuth(ctx);
-
     const myNotes = await ctx.db
       .query("notes")
-      .withIndex("by_author", (q) => q.eq("authorId", user._id))
+      .withIndex("by_author", (q) => q.eq("authorId", ctx.user._id))
       .collect();
 
     const publicNotes = await ctx.db
@@ -45,7 +42,7 @@ export const list = query({
 });
 
 /** Create a note. */
-export const create = mutation({
+export const create = userMutation({
   args: {
     title: v.string(),
     body: v.string(),
@@ -53,13 +50,12 @@ export const create = mutation({
   },
   returns: v.id("notes"),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
     const now = Date.now();
 
     return await ctx.db.insert("notes", {
       title: args.title,
       body: args.body,
-      authorId: user._id,
+      authorId: ctx.user._id,
       isPublic: args.isPublic,
       createdAt: now,
       updatedAt: now,
@@ -68,7 +64,7 @@ export const create = mutation({
 });
 
 /** Update a note (author only). */
-export const update = mutation({
+export const update = userMutation({
   args: {
     id: v.id("notes"),
     title: v.optional(v.string()),
@@ -77,9 +73,8 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
     const note = await ctx.db.get(args.id);
-    if (!note || note.authorId !== user._id) {
+    if (!note || note.authorId !== ctx.user._id) {
       throw new Error("Note not found or access denied");
     }
 
@@ -93,13 +88,12 @@ export const update = mutation({
 });
 
 /** Delete a note (author only). */
-export const remove = mutation({
+export const remove = userMutation({
   args: { id: v.id("notes") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
     const note = await ctx.db.get(args.id);
-    if (!note || note.authorId !== user._id) {
+    if (!note || note.authorId !== ctx.user._id) {
       throw new Error("Note not found or access denied");
     }
 

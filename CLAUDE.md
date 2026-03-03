@@ -31,6 +31,7 @@ convex/                          # Backend
   auth.ts                        # Convex Auth provider config (Password, GitHub, Google)
   auth.config.ts                 # Self-issued JWT config
   authHelpers.ts                 # Auth guards (requireAuth, requireAdmin, hasRole)
+  functions.ts                   # Custom function builders (userQuery, userMutation, adminQuery, adminMutation)
   http.ts                        # HTTP router — Convex Auth routes
   users.ts                       # User CRUD (no auto-provisioning — Convex Auth handles it)
   convex.config.ts               # App definition — registers R2 component
@@ -173,27 +174,37 @@ Three layers of defense — all three must be maintained when adding or modifyin
 - All protected pages live under `src/app/(app)/`
 - **Never put protected pages outside `(app)/`** without adding proxy + guard coverage
 
-### Layer 3: Convex Backend Guards (`convex/authHelpers.ts`)
+### Layer 3: Convex Backend Guards (`convex/functions.ts` + `convex/authHelpers.ts`)
 
-- **Every** query/mutation/action that accesses user data MUST call an auth guard
-- Available guards: `requireAuth(ctx)`, `requireAdmin(ctx)`, `hasRole(ctx, role)`
-- Guards use `getAuthUserId(ctx)` from `@convex-dev/auth/server`
-- Queries/mutations: call the guard at the top of the handler
-- Actions (`"use node"` files): call `ctx.auth.getUserIdentity()` and throw if `null`
+Auth is enforced **automatically** via custom function builders from `convex/functions.ts`. These use `convex-helpers` to inject `ctx.user` and role checks at the builder level — no manual `requireAuth()` calls needed.
+
+| Builder | Auth | `ctx.user` | Use for |
+|---------|------|------------|---------|
+| `userQuery` | Authenticated | Yes | Any query needing the current user |
+| `userMutation` | Authenticated | Yes | Any mutation needing the current user |
+| `adminQuery` | Admin role | Yes | Admin-only reads |
+| `adminMutation` | Admin role | Yes | Admin-only writes |
+| Raw `query`/`mutation` | **None** | No | Explicitly public endpoints only |
+
+- **Default to `userQuery`/`userMutation`** for new functions
+- Raw `query`/`mutation` from `_generated/server` requires an `eslint-disable` comment (ESLint blocks it)
+- Actions (`"use node"` files): still use `ctx.auth.getUserIdentity()` null check manually
+- `ctx.user` is a full `Doc<"users">` — access `ctx.user._id`, `ctx.user.roles`, etc.
 - **Never skip auth checks** — even if the frontend "should" prevent unauthenticated access, the backend must enforce it independently
 
 ### Checklist for New Features
 
 - [ ] Page under `src/app/(app)/`? Protected by proxy + client gate automatically
 - [ ] New public page? Add route pattern to `src/proxy.ts` `isPublicRoute`
-- [ ] New query/mutation? Add `requireAuth(ctx)` or `requireAdmin(ctx)` at top of handler
+- [ ] New query/mutation? Use `userQuery`/`userMutation` from `./functions` (auth is automatic)
+- [ ] Admin-only query/mutation? Use `adminQuery`/`adminMutation` from `./functions`
 - [ ] New action? Add `ctx.auth.getUserIdentity()` null check at top of handler
 - [ ] New role? Follow "Adding a Role" section below
 
 ## Adding a Feature
 
 1. Add table(s) to `convex/schema.ts` (use `v.optional()` for new fields on existing tables)
-2. Create `convex/your-feature.ts` with queries/mutations
+2. Create `convex/your-feature.ts` with queries/mutations using `userQuery`/`userMutation` from `./functions`
 3. If Node.js packages needed: create `convex/your-featureActions.ts` with `"use node"`
 4. Create `src/app/(app)/your-feature/page.tsx` (`"use client"` directive)
 5. Add nav entry in `src/components/layout/sidebar.tsx`
