@@ -18,7 +18,7 @@ CONVEX_DIR="$PROJECT_ROOT/convex"
 # Collect exported Convex function names from source files (excluding tests and _generated)
 FUNCTIONS=$(find "$CONVEX_DIR" -name '*.ts' -not -path '*/__tests__/*' -not -path '*/_generated/*' -not -name '*.d.ts' \
   | xargs grep -ohE 'export\s+const\s+\w+\s*=\s*(userQuery|userMutation|adminQuery|adminMutation|query|mutation|action|internalQuery|internalMutation|internalAction)\(' 2>/dev/null \
-  | sed -E 's/export\s+const\s+(\w+)\s*=.*/\1/')
+  | sed -E 's/export[[:space:]]+const[[:space:]]+([[:alnum:]_]+)[[:space:]]*=.*/\1/')
 
 [ -z "$FUNCTIONS" ] && exit 0
 
