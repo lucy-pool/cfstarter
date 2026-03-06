@@ -223,4 +223,34 @@ Auth is enforced **automatically** via custom function builders from `convex/fun
 2. Update the `roles` field validator in the `users` table
 3. Add a guard in `convex/authHelpers.ts` (e.g. `requireEditor`)
 4. Update `convex/users.ts` `updateUserRoles` args validator
+5. Add a test account row to the **Test Accounts** table below (email: `test<role>@lucystarter.dev`, password: `Test<Role>123!`)
+
+## Removing a Role
+
+1. Remove the literal from `ROLES` and `roleValidator` in `convex/schema.ts`
+2. Update the `roles` field validator in the `users` table
+3. Remove the guard in `convex/authHelpers.ts`
+4. Update `convex/users.ts` `updateUserRoles` args validator
+5. Remove the corresponding test account row from the **Test Accounts** table below
+
+## Test Accounts
+
+Shared dev/test accounts — one per role. Any agent or human can use these to log in.
+If login fails (account doesn't exist), create it via `/signup` with the exact credentials below.
+
+| Role | Email | Password |
+|------|-------|----------|
+| user | `testuser@lucystarter.dev` | `TestUser123!` |
+| admin | `testadmin@lucystarter.dev` | `TestAdmin123!` |
+
+**Creating accounts:**
+1. Navigate to `/signup`, use the email + password above
+2. For the **admin** account, promote after signup via Convex dashboard:
+   - Open `npx convex dashboard` → `users` table
+   - Find `testadmin@lucystarter.dev`, edit `roles` to `["user", "admin"]`
+
+**Important:**
+- Dev/local only. Never use these in production.
+- Password provider does not require email verification — signup is instant.
+- OAuth (GitHub, Google) is available but not used for shared test accounts.
 
