@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 // ── Role values ─────────────────────────────────────────────────────
 // Update these when you add your own roles.
@@ -43,7 +42,8 @@ export const emailTemplateValidator = v.union(
 );
 
 export default defineSchema({
-  ...authTables,
+  // Better Auth manages auth tables (user, session, account, etc.) internally
+  // via the component. Only the app's users table with custom fields is defined here.
   users: defineTable({
     name: v.optional(v.string()),
     email: v.optional(v.string()),
