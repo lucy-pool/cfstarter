@@ -316,7 +316,6 @@ function TemplateEditor({
   const loadVisualEditor = useCallback(async () => {
     if (EditorComponent.current) return;
     const mod = await import("@maily-to/core");
-    // @ts-expect-error -- CSS module import
     await import("@maily-to/core/style.css");
     EditorComponent.current = mod.Editor;
     setVisualEditorLoaded(true);
