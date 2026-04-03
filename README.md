@@ -1,10 +1,10 @@
-# Convex Auth Starter
+# Lucystarter
 
-A production-ready starter for building full-stack apps with **Convex**, **Next.js 16**, **Convex Auth**, and **shadcn/ui**. Ships with authentication, roles, email (Resend/SMTP), Cloudflare R2 file uploads, OpenRouter AI chat, a test suite, and auto-maintained architecture diagrams.
+A production-ready starter for building full-stack apps with **Convex**, **TanStack Start**, **Better Auth**, and **shadcn/ui**. Ships with authentication, roles, email (Resend/SMTP), Cloudflare R2 file uploads, OpenRouter AI chat, a test suite, and auto-maintained architecture diagrams.
 
 ## What's Included
 
-- **Auth** — Email/password, GitHub OAuth, Google OAuth via Convex Auth. Protected routes just work — anything under `(app)/` requires authentication.
+- **Auth** — Email/password, GitHub OAuth, Google OAuth via Better Auth. Protected routes just work — anything under `_app/` requires authentication.
 - **Roles** — Defined once in `convex/schema.ts`. New users get `user`. Admins can promote. Add roles by editing one file.
 - **Email** — Full email service with Resend and SMTP providers, built-in templates (welcome, notification, etc.), custom template editor with visual and HTML modes.
 - **File uploads** — Browser-to-R2 direct upload via presigned URLs. Convex stores metadata only.
@@ -34,14 +34,15 @@ A production-ready starter for building full-stack apps with **Convex**, **Next.
 # 1. Install dependencies
 bun install
 
-# 2. Start Convex (pushes schema, creates .env.local with CONVEX_DEPLOYMENT and NEXT_PUBLIC_CONVEX_URL)
+# 2. Start Convex (pushes schema, creates .env.local)
 bunx convex dev
 
-# 3. Initialize Convex Auth (generates JWT_PRIVATE_KEY and JWKS — required for auth to work)
-npx @convex-dev/auth
+# 3. Set Better Auth secret in Convex dashboard
+bunx convex env set BETTER_AUTH_SECRET <your-secret>
+bunx convex env set SITE_URL <your-convex-site-url>
 
-# 4. Start Next.js (in a second terminal)
-bun dev
+# 4. Start the dev server (in a second terminal)
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000), sign up with email/password, and you'll land on the dashboard.
@@ -130,8 +131,8 @@ bunx convex env set EMAIL_FROM "Your App <noreply@yourdomain.com>"
 ```
 convex/                          # Backend
   schema.ts                      # Tables, indexes, role + fileType validators
-  auth.ts                        # Convex Auth providers (Password, GitHub, Google)
-  auth.config.ts                 # Self-issued JWT config
+  auth.ts                        # Better Auth config (Email/Password, GitHub, Google)
+  auth.config.ts                 # Better Auth JWT config via @convex-dev/better-auth
   authHelpers.ts                 # Auth guards (requireAuth, requireAdmin, hasRole)
   functions.ts                   # Custom builders (userQuery, userMutation, adminQuery, adminMutation)
   users.ts                       # User CRUD
@@ -153,20 +154,27 @@ convex/                          # Backend
     messages.ts                  # Message history CRUD
     chat.ts                      # "use node" — OpenRouter completions
 
-src/app/                         # Frontend (Next.js App Router)
-  layout.tsx                     # Root: ConvexAuthNextjsServerProvider
-  page.tsx                       # Landing page
-  signin/page.tsx                # Sign-in (Password + OAuth)
-  signup/page.tsx                # Sign-up (Password + OAuth)
-  (app)/                         # Protected routes
-    layout.tsx                   # Auth gate (redirects to /signin)
-    dashboard/page.tsx           # Welcome + demo links
-    notes/page.tsx               # Demo: CRUD
-    files/page.tsx               # Demo: R2 upload
-    ai-chat/page.tsx             # Demo: OpenRouter chat
+src/
+  start.ts                       # TanStack Start config (defaultSsr: false)
+  router.tsx                     # TanStack Router instance
+
+src/routes/                      # Frontend (TanStack Router, file-based)
+  __root.tsx                     # Root layout: ConvexProvider, ThemeProvider, SSR auth
+  index.tsx                      # Landing page (/)
+  signin.tsx                     # Sign-in (Email/Password + OAuth)
+  signup.tsx                     # Sign-up (Email/Password + OAuth)
+  forgot-password.tsx            # Forgot password
+  reset-password.tsx             # Reset password
+  api/auth/$.ts                  # API catch-all — proxies Better Auth to Convex
+  _app.tsx                       # Auth-gated layout (redirects to /signin)
+  _app/                          # Protected routes
+    dashboard.tsx                # Welcome + demo links
+    notes.tsx                    # Demo: CRUD
+    files.tsx                    # Demo: R2 upload with pending/complete lifecycle
+    ai-chat.tsx                  # Demo: OpenRouter chat
 
 src/components/
-  providers.tsx                  # ConvexAuthProvider wiring
+  providers.tsx                  # ThemeProvider
   layout/
     app-shell.tsx                # Sidebar + topbar + content
     sidebar.tsx                  # Nav items — add your routes here
@@ -225,15 +233,18 @@ export const create = userMutation({
 
 ### 3. Create a page
 
-Create `src/app/(app)/projects/page.tsx`:
+Create `src/routes/_app/projects.tsx`:
 
 ```typescript
-"use client";
-
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 
-export default function ProjectsPage() {
+export const Route = createFileRoute("/_app/projects")({
+  component: ProjectsPage,
+});
+
+function ProjectsPage() {
   const projects = useQuery(api.projects.list);
   const createProject = useMutation(api.projects.create);
   // ... your UI
@@ -247,9 +258,9 @@ In `src/components/layout/sidebar.tsx`, add to the nav items array.
 ### 5. Delete the demos
 
 Remove what you don't need:
-- **Notes:** `convex/notes.ts`, `src/app/(app)/notes/`, `notes` table from schema
-- **Files demo page:** `src/app/(app)/files/` (keep `convex/storage/` if you need uploads)
-- **AI demo page:** `src/app/(app)/ai-chat/` (keep `convex/ai/` if you need AI)
+- **Notes:** `convex/notes.ts`, `src/routes/_app/notes.tsx`, `notes` table from schema
+- **Files demo page:** `src/routes/_app/files.tsx` (keep `convex/storage/` if you need uploads)
+- **AI demo page:** `src/routes/_app/ai-chat.tsx` (keep `convex/ai/` if you need AI)
 
 ## Convex Cheat Sheet
 
@@ -268,10 +279,11 @@ Remove what you don't need:
 | Variable | Where to set | Description |
 |----------|-------------|-------------|
 | `CONVEX_DEPLOYMENT` | `.env.local` | Auto-set by `bunx convex dev` |
-| `NEXT_PUBLIC_CONVEX_URL` | `.env.local` | Auto-set by `bunx convex dev` |
-| `JWT_PRIVATE_KEY` | Convex dashboard | Auto-set by `npx @convex-dev/auth` |
-| `JWKS` | Convex dashboard | Auto-set by `npx @convex-dev/auth` |
-| `SITE_URL` | Convex dashboard | Auto-set by `npx @convex-dev/auth` |
+| `VITE_CONVEX_URL` | `.env.local` | Auto-set by `bunx convex dev` |
+| `VITE_CONVEX_SITE_URL` | `.env.local` | Convex HTTP actions URL (for auth proxy) |
+| `VITE_SITE_URL` | `.env.local` | Frontend URL (e.g. `http://localhost:3000`) |
+| `BETTER_AUTH_SECRET` | Convex dashboard | Secret for Better Auth session signing |
+| `SITE_URL` | Convex dashboard | Better Auth base URL |
 | `AUTH_GITHUB_ID` | Convex dashboard | GitHub OAuth client ID |
 | `AUTH_GITHUB_SECRET` | Convex dashboard | GitHub OAuth client secret |
 | `AUTH_GOOGLE_ID` | Convex dashboard | Google OAuth client ID |
@@ -293,13 +305,12 @@ Remove what you don't need:
 
 | Problem | Fix |
 |---------|-----|
-| `Missing environment variable JWT_PRIVATE_KEY` | Run `npx @convex-dev/auth` |
-| `Missing environment variable JWKS` | Run `npx @convex-dev/auth` — it sets both keys |
-| Auth not working after sign-up | Check `JWT_PRIVATE_KEY` and `JWKS` are set: `bunx convex env list` |
+| Auth not working after sign-up | Check `BETTER_AUTH_SECRET` and `SITE_URL` in Convex dashboard |
 | OAuth redirect errors | Verify callback URLs match your Convex site URL |
 | File uploads failing | Check all 4 R2 env vars and CORS on the bucket |
 | AI chat error | Verify `OPENROUTER_API_KEY` is set |
 | `bunx convex dev` won't start | Run `bun install` first, ensure you're logged in |
+| Blank page in dev | Check Vite terminal for SSR errors |
 
 ## License
 
