@@ -27,6 +27,9 @@
 ## Architecture
 
 ```
+functions/                       # Cloudflare Pages Functions
+  api/auth/[[path]].ts           # Edge proxy — forwards /api/auth/* to Convex HTTP backend
+
 vite.config.ts                   # Vite + TanStack Start plugin config
 
 convex/                          # Backend
@@ -80,8 +83,6 @@ src/routes/                      # Frontend (file-based routing via TanStack Rou
       users.tsx                  # Admin: user management
       emails.tsx                 # Admin: email logs
       email-templates.tsx        # Admin: email template editor
-  api/auth/$.ts                  # API catch-all — proxies Better Auth requests to Convex
-
 src/components/
   providers.tsx                  # ThemeProvider (next-themes)
   theme-toggle.tsx               # Dark/light mode toggle
@@ -100,7 +101,6 @@ src/hooks/
 src/lib/
   utils.ts                       # cn() utility
   auth-client.ts                 # Better Auth client (useSession, signIn, signUp, signOut)
-  auth-server.ts                 # Better Auth server-side helpers
 
 src/styles/
   globals.css                    # Global CSS (Tailwind + custom properties)
@@ -190,11 +190,12 @@ Three layers of defense — all three must be maintained when adding or modifyin
 - **Default is deny** — any route under `_app/` requires authentication automatically
 - **When adding a new public route**: create it as a top-level file in `src/routes/`, not under `_app/`
 
-### Layer 2: API Auth Proxy (`src/routes/api/auth/$.ts`)
+### Layer 2: Auth Edge Proxy (`functions/api/auth/[[path]].ts`)
 
-- Catch-all API route that proxies Better Auth requests to the Convex HTTP backend
-- Handles sign-in, sign-up, sign-out, session management, and OAuth callbacks
-- No manual auth logic needed — Better Auth handles session tokens via cookies
+- Cloudflare Pages Function that proxies `/api/auth/*` to the Convex HTTP backend
+- Keeps auth cookies on the same origin (no cross-origin issues)
+- In local dev, Vite's `server.proxy` config handles the same forwarding
+- No manual auth logic — Better Auth handles session tokens via cookies
 
 ### Layer 3: Convex Backend Guards (`convex/functions.ts` + `convex/authHelpers.ts`)
 
@@ -261,6 +262,7 @@ Auth is enforced **automatically** via custom function builders from `convex/fun
 | `SITE_URL` | Convex dashboard | Backend base URL for Better Auth |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | Convex dashboard | GitHub OAuth credentials |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Convex dashboard | Google OAuth credentials |
+| `CONVEX_SITE_URL` | Cloudflare Pages env | Auth proxy target (edge function) |
 
 ## Test Accounts
 
