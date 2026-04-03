@@ -4,7 +4,8 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend / DB | Convex (real-time, reactive, transactional) |
-| Frontend | TanStack Start (Vite, file-based routing, SSR-capable) |
+| Frontend | TanStack Start (Vite, file-based routing, Selective SSR) |
+| Hosting | Cloudflare Workers (Selective SSR, ~0ms cold starts) |
 | Router | TanStack Router |
 | Auth | Better Auth (`@convex-dev/better-auth` — Email/Password, GitHub, Google OAuth) |
 | UI | shadcn/ui + Tailwind CSS |
@@ -27,8 +28,7 @@
 ## Architecture
 
 ```
-functions/                       # Cloudflare Pages Functions
-  api/auth/[[path]].ts           # Edge proxy — forwards /api/auth/* to Convex HTTP backend
+wrangler.jsonc                   # Cloudflare Workers deployment config
 
 vite.config.ts                   # Vite + TanStack Start plugin config
 
@@ -64,6 +64,7 @@ convex/                          # Backend
     chat.ts                      # "use node" — chat action (api.ai.chat.*)
 
 src/
+  start.ts                       # TanStack Start config (defaultSsr: false)
   router.tsx                     # TanStack Router instance + route tree
 
 src/routes/                      # Frontend (file-based routing via TanStack Router)
@@ -84,6 +85,7 @@ src/routes/                      # Frontend (file-based routing via TanStack Rou
       users.tsx                  # Admin: user management
       emails.tsx                 # Admin: email logs
       email-templates.tsx        # Admin: email template editor
+  api/auth/$.ts                  # API catch-all — proxies Better Auth requests to Convex
 src/components/
   providers.tsx                  # ThemeProvider (next-themes)
   theme-toggle.tsx               # Dark/light mode toggle
@@ -102,6 +104,7 @@ src/hooks/
 src/lib/
   utils.ts                       # cn() utility
   auth-client.ts                 # Better Auth client (useSession, signIn, signUp, signOut)
+  auth-server.ts                 # Better Auth server-side helpers (getToken, handler)
 
 src/styles/
   globals.css                    # Global CSS (Tailwind + custom properties)
@@ -191,12 +194,12 @@ Three layers of defense — all three must be maintained when adding or modifyin
 - **Default is deny** — any route under `_app/` requires authentication automatically
 - **When adding a new public route**: create it as a top-level file in `src/routes/`, not under `_app/`
 
-### Layer 2: Auth Edge Proxy (`functions/api/auth/[[path]].ts`)
+### Layer 2: API Auth Proxy (`src/routes/api/auth/$.ts`)
 
-- Cloudflare Pages Function that proxies `/api/auth/*` to the Convex HTTP backend
-- Keeps auth cookies on the same origin (no cross-origin issues)
-- In local dev, Vite's `server.proxy` config handles the same forwarding
+- Server-side route that proxies Better Auth requests to the Convex HTTP backend
+- Runs as a TanStack Start server function (same origin, same process)
 - No manual auth logic — Better Auth handles session tokens via cookies
+- In local dev, Vite's `server.proxy` also forwards `/api/auth` for HMR compatibility
 
 ### Layer 3: Convex Backend Guards (`convex/functions.ts` + `convex/authHelpers.ts`)
 
@@ -251,6 +254,22 @@ Browser → createPendingFile (mutation, status:"pending")
 - A cron job (`convex/crons.ts`) runs every 30 minutes to delete stale `pending` records
 - Legacy records (no `status` field) are treated as `complete`
 
+## Selective SSR
+
+SSR is **off by default** (`defaultSsr: false` in `src/start.ts`). All routes render client-side unless explicitly opted in.
+
+To enable SSR for a specific route:
+```ts
+export const Route = createFileRoute("/marketing")({
+  ssr: true,
+  component: MarketingPage,
+});
+```
+
+Options: `true` (full SSR), `false` (client-only, default), `"data-only"` (server data fetch, client render).
+
+SSR routes get `beforeLoad` token from the server, so authenticated SSR works automatically via the root route's `getAuth` server function.
+
 ## Adding a Role
 
 1. Add the literal to `ROLES` and `roleValidator` in `convex/schema.ts`
@@ -278,7 +297,7 @@ Browser → createPendingFile (mutation, status:"pending")
 | `SITE_URL` | Convex dashboard | Backend base URL for Better Auth |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | Convex dashboard | GitHub OAuth credentials |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Convex dashboard | Google OAuth credentials |
-| `CONVEX_SITE_URL` | Cloudflare Pages env | Auth proxy target (edge function) |
+| `CONVEX_SITE_URL` | Cloudflare Workers env | Auth proxy target (server function) |
 
 ## Test Accounts
 
