@@ -309,7 +309,9 @@ function TemplateEditor({
   const [initialized, setInitialized] = useState(false);
   const [visualEditorLoaded, setVisualEditorLoaded] = useState(false);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const EditorComponent = useRef<any>(null);
 
   // Lazy-load Maily editor only when visual mode is selected

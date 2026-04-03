@@ -92,6 +92,7 @@
     "@types/node": "^25.5.0",
     "@types/nodemailer": "^7.0.11",
     "convex-test": "^0.0.41",
+    "typescript-eslint": "^8.58.0",
     "vitest": "^4.0.18"
   }
 }

@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const isAuthenticated = !!session;
   const navigate = useNavigate();
 
