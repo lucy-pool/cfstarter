@@ -43,12 +43,17 @@ export const Route = createRootRouteWithContext<{
     ],
   }),
   beforeLoad: async (ctx) => {
-    const token = await getAuth();
-    if (token) {
-      ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+    try {
+      const token = await getAuth();
+      if (token) {
+        ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+      }
+      return { isAuthenticated: !!token, token };
+    } catch {
+      return { isAuthenticated: false, token: undefined };
     }
-    return { isAuthenticated: !!token, token };
   },
+  ssr: true,
   component: RootComponent,
 });
 
