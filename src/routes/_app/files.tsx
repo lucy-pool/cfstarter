@@ -10,7 +10,7 @@ import { Trash2, Upload, Download, FileIcon } from "lucide-react";
 import { formatBytes, getFileType } from "@/lib/utils";
 
 // ── Demo page — shows the R2 upload pattern ──────────────────────────
-// Flow: generateUploadUrl → PUT to R2 → syncMetadata → storeFileMetadata
+// Flow: createPendingFile → PUT to R2 → confirmUpload
 
 export const Route = createFileRoute("/_app/files")({
   component: FilesPage,
@@ -20,7 +20,8 @@ function FilesPage() {
   const files = useQuery(api.storage.files.getMyFiles);
   const uploadFile = useUploadFile(api.storage.r2);
   const generateDownloadUrl = useAction(api.storage.downloads.generateDownloadUrl);
-  const storeMetadata = useMutation(api.storage.files.storeFileMetadata);
+  const createPendingFile = useMutation(api.storage.files.createPendingFile);
+  const confirmUpload = useMutation(api.storage.files.confirmUpload);
   const deleteFileMutation = useMutation(api.storage.files.deleteFile);
 
   const [uploading, setUploading] = useState(false);
@@ -33,26 +34,30 @@ function FilesPage() {
     setProgress(0);
 
     try {
-      const key = await uploadFile(file, {
+      // 1. Create pending record in DB
+      const fileId = await createPendingFile({
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        fileType: getFileType(file.type),
+      });
+
+      // 2. Upload to R2 (returns storageKey)
+      const storageKey = await uploadFile(file, {
         onProgress: ({ loaded, total }) => {
           setProgress(Math.round((loaded / total) * 100));
         },
       });
 
-      await storeMetadata({
-        fileName: file.name,
-        storageKey: key,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        fileType: getFileType(file.type),
-      });
+      // 3. Confirm upload (attach storageKey, flip pending → complete)
+      await confirmUpload({ fileId, storageKey });
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
       setUploading(false);
       setProgress(0);
     }
-  }, [uploadFile, storeMetadata]);
+  }, [uploadFile, createPendingFile, confirmUpload]);
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -174,13 +179,15 @@ function FilesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => file.storageKey && handleDownload(file.storageKey, file.fileName)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
+                    {file.storageKey && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload(file.storageKey!, file.fileName)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
