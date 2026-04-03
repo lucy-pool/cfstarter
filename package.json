@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "vite preview --port 3000",
+    "start": "node .output/server/index.mjs",
+    "deploy": "wrangler deploy",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -88,11 +89,13 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.31.0",
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^25.5.0",
     "@types/nodemailer": "^7.0.11",
     "convex-test": "^0.0.41",
     "typescript-eslint": "^8.58.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.80.0"
   }
 }
