@@ -27,5 +27,8 @@ export default defineConfig(({ mode }) => {
       { find: "@/", replacement: path.resolve(__dirname, "./src") + "/" },
     ],
   },
+  ssr: {
+    noExternal: ["tailwindcss"],
+  },
 };
 });
