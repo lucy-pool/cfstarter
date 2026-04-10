@@ -36,6 +36,8 @@ If an uncovered module exists:
 2. Embed the new file paths directly into the diagram (inside tables, mermaid node labels, or prose) so the Stop hook's content-derived watch system picks them up next time.
 3. If no existing diagram fits, create a new one in `memory/ai/diagrams/` with a descriptive filename and include the file paths inside it.
 
+Also verify the **public API surface** each diagram describes still matches the source. If a diagram says `foo.ts` exports `a`, `b`, `c` but the file now exports `a`, `b`, `d`, the diagram is stale — update it.
+
 ## 3. Greybox consistency
 
 Open `memory/ai/diagrams/greybox.md`. Compare its subgraphs against the current `convex/` subfolder structure. Every deep module (subfolder under `convex/` with multiple files) should have a `subgraph "Deep Module: <Name>"` block with `PUBLIC API` and `INTERNALS` sections. Each block should list the current file names.
@@ -54,14 +56,23 @@ Read the `## Architecture` section in `CLAUDE.md`. The code-block immediately un
 - Keep the existing indentation style and inline comment format. Do NOT reformat untouched lines.
 - Do NOT touch any other section of CLAUDE.md — only the fenced code block under `## Architecture`.
 
-## Output
+## 5. Rules
 
-At the end, print a short report to the user:
+- **Every diagram update or creation MUST explicitly mention the file paths it covers**, using the form `convex/foo/bar.ts` or `src/components/x/y.tsx`. Bare filenames like `bar.ts` do NOT participate in the Stop hook's content-derived watch system — without full-path mentions, the diagram is invisible to Layer 1. This is the single most important rule.
+- **Minimum-scope edits only.** Do not rewrite sections of a diagram that are still correct just because you happen to be in the file. Fix what is wrong; leave the rest alone.
+- Path mentions must start with one of: `convex/`, `src/`, `tests/`, `.claude/hooks/`.
+- Diagrams should include mermaid code blocks for visual structure and tables for quick reference.
+- Prioritize completeness for AI consumption — include every edge case and conditional path in updated content.
+- Do **NOT** commit. Leave all updates as unstaged changes in the working tree for the user to review with `git diff`.
 
-- **Broken references fixed:** N (with a list of which diagrams and what was changed)
-- **Coverage gaps closed:** N (which diagrams were updated, which new diagrams were created)
+## 6. Report
+
+At the end, print a concise report to the user — **keep it under 30 lines**. The user can read the diff for details.
+
+- **Diagrams updated:** list with one-line reasons
+- **Diagrams created:** list with one-line coverage descriptions
+- **Broken references fixed:** count and summary
+- **Coverage gaps closed:** count and summary
 - **Greybox drift fixed:** yes / no (which subgraphs changed)
-- **CLAUDE.md tree updated:** yes / no (how many lines added / removed)
+- **CLAUDE.md tree updated:** yes / no (approximate lines added / removed)
 - **Unresolved issues:** anything you flagged but chose not to fix, with reasoning
-
-Remind the user that all changes are unstaged and they should review with `git diff` before committing.

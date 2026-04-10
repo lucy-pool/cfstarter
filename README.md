@@ -262,6 +262,50 @@ Remove what you don't need:
 - **Files demo page:** `src/routes/_app/files.tsx` (keep `convex/storage/` if you need uploads)
 - **AI demo page:** `src/routes/_app/ai-chat.tsx` (keep `convex/ai/` if you need AI)
 
+## Architecture Docs Auto-Sync
+
+The template keeps `memory/ai/diagrams/*.md` and the `## Architecture` tree in `CLAUDE.md` in sync with your code automatically, so the AI assistant always sees an accurate picture of the codebase. There is **no hardcoded file-to-diagram mapping** — the system derives it from what each diagram actually mentions and self-heals over time. Add a new module, rename a folder, split a service — zero hook changes required.
+
+### How it works
+
+At the end of every assistant turn, `.claude/hooks/stop-hook.ts` runs tests/typecheck/lint, then (on success) decides whether any documentation needs updating. If so, it spawns a background `claude -p --model sonnet` sub-process with a targeted prompt. The hook is debounced for 30 seconds to avoid spam.
+
+Four signals can trigger the sub-process:
+
+**Layer 1 — content-derived watches.** The hook scans every `*.md` in `memory/ai/diagrams/` and extracts every file path each diagram mentions in its body (tables, mermaid node labels, prose). For each file that changed this turn, it finds which diagrams reference that file (exact path match or parent-directory prefix match) and flags them for update. The "mapping" of file → diagram is literally the diagram content.
+
+**Layer 2 — gap-fill.** If a changed file lives inside a watched source tree (`convex/`, `src/routes/`, `src/components/`, `src/lib/`, `src/hooks/`, `.claude/hooks/`) but **isn't** referenced in any diagram, the hook treats that as a coverage gap. The sub-Claude is told: "decide whether to extend an existing diagram, create a new one, or skip if it's genuinely not architectural." When it extends a diagram, it embeds the new file paths — which teaches Layer 1 to watch them automatically on the next Stop. That's the self-healing loop.
+
+**Layer 3 — `/audit-diagrams` slash command.** On-demand full audit. Run it anytime (before a release, after a big refactor, when you suspect drift from git merges) and it walks every diagram: fixes broken file references, closes coverage gaps, verifies greybox module boundaries against the current `convex/` folder structure, and re-syncs the `## Architecture` tree in `CLAUDE.md`. Does not commit — leaves everything unstaged for review.
+
+**Structural tree changes.** The hook runs `git status --porcelain` and only refreshes the CLAUDE.md architecture tree when files have been **added, deleted, or renamed** inside a watched directory. Pure content edits never trigger a tree refresh — that would churn on every keystroke.
+
+**Zero-watch backfill (piggyback).** If a diagram has no extractable full-path references (e.g. it was written with bare filenames like `r2.ts` instead of `convex/storage/r2.ts`), it's invisible to Layer 1 forever. The hook detects these zero-watch diagrams and, **only when it's already spawning for some other reason**, appends a piggyback instruction telling the sub-Claude to rewrite those diagrams with explicit full paths. Passive, cheap, and eventually makes every diagram fully auto-watched.
+
+### The one rule for humans writing diagrams by hand
+
+**Mention files by full relative path, not bare filename.** Use `` `convex/storage/r2.ts` ``, not `` `r2.ts` ``. Bare filenames do not participate in the watch system. Every diagram update the AI assistant makes will follow this rule automatically (the hook prompt enforces it), but if you edit a diagram by hand, use full paths starting with `convex/`, `src/`, `tests/`, or `.claude/hooks/`.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `.claude/hooks/stop-hook.ts` | Stop event hook — tests/typecheck/lint, then orchestrates the diagram + tree update pipeline |
+| `.claude/hooks/diagram-watches.ts` | Extracts file references from diagrams; matches changed files → affected diagrams |
+| `.claude/commands/audit-diagrams.md` | `/audit-diagrams` slash command (Layer 3 backstop) |
+| `memory/ai/diagrams/*.md` | Mermaid diagrams — the input to the watch system and output of auto-updates |
+| `CLAUDE.md` → `## Architecture` | File tree block — auto-refreshed on structural changes |
+
+### Gotchas
+
+- **Sub-Claude committing despite instructions.** The hook prompt explicitly says "Do NOT commit. Leave all updates as unstaged changes", but in rare cases the background sub-Claude will commit anyway. If you see an unexpected `diagram update` commit, just `git reset --soft HEAD~1` and re-commit however you like. This is a soft limitation of the spawn-a-sub-Claude pattern.
+- **First Stop after adopting this.** On a fresh template, `data-flow.md`, `functions.md`, and `schema.md` ship as zero-watch diagrams (they use bare filenames). The first Stop that fires for any other reason will piggyback-backfill them, or you can run `/audit-diagrams` once to rewrite all three in a single batch.
+- **Debounce.** Two Stops within 30 seconds only fire the diagram updater once. The second one reports `Skipped — another update ran within 30s.` to stderr.
+
+### Disabling it
+
+If you don't want any of this, delete `.claude/hooks/stop-hook.ts` or remove the `Stop` entry from `.claude/settings.json`. Delete `memory/ai/diagrams/` to stop scanning diagrams entirely. The rest of the template keeps working.
+
 ## Convex Cheat Sheet
 
 | Concept | Rule |

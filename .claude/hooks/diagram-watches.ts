@@ -1,10 +1,30 @@
-import { readFileSync, readdirSync } from "fs";
-import { basename, dirname, join } from "path";
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
 
-// ── Watched tree roots ──────────────────────────────────────────────
-// A file is considered "in a source tree" (and therefore eligible for
-// basename matching + Layer-2 gap-fill detection) only if its relative
-// path starts with one of these prefixes.
+// ── Content-derived diagram watch extraction ─────────────────────────
+//
+// The Stop hook derives "which source files belong to which diagram"
+// from what each diagram *actually mentions* in its content, not from
+// a hardcoded mapping table. Adding a new diagram, renaming a module,
+// or spinning up a new subfolder requires zero hook changes — as long
+// as the diagram references the relevant file paths, the hook flags
+// it for updates the next time those files change.
+//
+// A "watched path" is any file or directory reference found in a
+// diagram's markdown body that begins with one of the known source
+// roots (`convex/`, `src/`, `tests/`, `.claude/hooks/`). Matches are
+// tolerant of surrounding markdown formatting: backticks, table
+// cells, trailing punctuation, prose.
+//
+// MATCHING PHILOSOPHY: exact path match or directory-prefix match
+// only. Bare filenames (`r2.ts`) are NOT matched — they are too
+// ambiguous and create false positives. Diagrams MUST use full
+// relative paths (`convex/storage/r2.ts`) to be part of the watch
+// system. Diagrams that don't comply become "zero-watch" and are
+// backfilled by the hook's piggyback mechanism (see stop-hook.ts).
+
+// Roots that source files live under. Add new ones here if the
+// project grows new top-level directories.
 export const WATCHED_TREE_ROOTS: readonly string[] = [
   "convex/",
   "src/routes/",
@@ -15,224 +35,161 @@ export const WATCHED_TREE_ROOTS: readonly string[] = [
   ".claude/hooks/",
 ];
 
-// Overly generic basenames — matching these would cause false positives
-// across unrelated diagrams. Safer to require a full path or directory
-// reference for files with these names.
-export const BASENAME_DENYLIST: ReadonlySet<string> = new Set([
-  "index.ts",
-  "index.tsx",
-  "utils.ts",
-  "utils.tsx",
-  "config.ts",
-  "types.ts",
-  "helpers.ts",
-  "constants.ts",
-  "route.ts",
-  "layout.tsx",
-  "page.tsx",
-]);
+// Used inside the path-extraction regex. Keep in sync with
+// WATCHED_TREE_ROOTS conceptually — any root that should participate
+// in the watch system must be listed here.
+const PATH_ROOTS_REGEX_FRAGMENT = "convex|src|tests|\\.claude/hooks";
 
-// Paths that should never be tracked (auto-generated, noise).
+// Matches path-like strings that start with one of the watched roots:
+//
+//   convex/market/contractActions.ts
+//   convex/email/
+//   src/routes/_app/dashboard.tsx
+//   src/components/layout/sidebar.tsx
+//   tests/convex/storage/files.test.ts
+//   .claude/hooks/stop-hook.ts
+//
+// Rejected:
+//   - URLs (`https://x.com/src/foo`)          via (?<![:/]) lookbehind
+//   - Relative paths (`../convex/foo`)        via (?<!\.\./) lookbehind
+//   - Embedded in a longer word (`fooconvex`) via (?<!\w) lookbehind
+const PATH_REGEX = new RegExp(
+  `(?<![:/\\w])(?<!\\.\\.\\/)(?:${PATH_ROOTS_REGEX_FRAGMENT})/[a-zA-Z0-9_\\-./]+`,
+  "g",
+);
+
+// Ignored suffixes / fragments: auto-generated code that should never
+// participate in the watch system even if referenced by a diagram.
 const IGNORED_PATH_FRAGMENTS = ["_generated/", "routeTree.gen"];
 
-// ── Reference extraction ────────────────────────────────────────────
-
-export interface ExtractedReferences {
-  fullPaths: Set<string>;
-  basenames: Set<string>;
-  directories: Set<string>;
+/**
+ * Strip trailing punctuation that markdown prose commonly places next
+ * to a path (periods, commas, semicolons, colons, closing brackets,
+ * backticks) and any trailing slashes. Normalizes directory and file
+ * references to the same shape.
+ */
+function cleanPath(raw: string): string {
+  return raw.replace(/[.,;:)\]>`'"]+$/, "").replace(/\/+$/, "");
 }
 
 /**
- * Extract file references from one diagram's markdown body.
- *
- * Three styles are recognized:
- *   1. Full relative paths: `convex/auth.ts`, `src/routes/_app.tsx`
- *   2. Bare filenames with extensions: `r2.ts`, `sidebar.tsx`
- *   3. Directory prefixes: `convex/email/`, `src/routes/_app/`
- *
- * Matches are normalized: backticks stripped, trailing punctuation removed,
- * ignored fragments (`_generated/`, `routeTree.gen`) dropped.
+ * Extract every file / directory path referenced in a diagram's
+ * content. Returns a Set of normalized paths (no trailing slashes,
+ * no trailing punctuation, no ignored fragments).
  */
-export function extractReferences(text: string): ExtractedReferences {
-  const fullPaths = new Set<string>();
-  const basenames = new Set<string>();
-  const directories = new Set<string>();
-
-  // 1. Full-path regex. Roots come from WATCHED_TREE_ROOTS without trailing slash.
-  //    Allow any non-whitespace path segment characters, anchored on a real extension.
-  //    NOTE: we deliberately do NOT add dirname(match) to `directories`. If we did,
-  //    any file referenced at the convex root (e.g. `convex/auth.ts`) would register
-  //    `convex` as a watched directory, making every file under convex/ auto-match
-  //    that diagram via the ancestor walk. That would defeat Layer 2 (gap-fill).
-  //    Only explicit directory references (regex #3) contribute to byDirectory.
-  const fullPathRegex =
-    /\b(?:convex|src|tests|\.claude\/hooks)(?:\/[A-Za-z0-9_.\-]+)+\.(?:ts|tsx|js|jsx|md|sh)\b/g;
-  for (const match of text.matchAll(fullPathRegex)) {
-    const raw = match[0];
-    if (IGNORED_PATH_FRAGMENTS.some((frag) => raw.includes(frag))) continue;
-    fullPaths.add(raw);
+export function extractWatchedPaths(content: string): Set<string> {
+  const paths = new Set<string>();
+  // Reset lastIndex since the regex uses /g and may be reused.
+  PATH_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PATH_REGEX.exec(content)) !== null) {
+    const cleaned = cleanPath(match[0]);
+    if (cleaned.length === 0) continue;
+    if (IGNORED_PATH_FRAGMENTS.some((frag) => cleaned.includes(frag))) continue;
+    paths.add(cleaned);
   }
-
-  // 2. Bare filename regex. Must NOT be preceded by `/` or a word character
-  //    (so "convex/auth.ts" does not double-count as the bare name "auth.ts").
-  const bareFilenameRegex =
-    /(?<![\/\w])([A-Za-z0-9_][A-Za-z0-9_\-]*\.(?:ts|tsx))\b/g;
-  for (const match of text.matchAll(bareFilenameRegex)) {
-    const name = match[1];
-    if (BASENAME_DENYLIST.has(name)) continue;
-    if (IGNORED_PATH_FRAGMENTS.some((frag) => name.includes(frag))) continue;
-    basenames.add(name);
-  }
-
-  // 3. Directory regex. Matches `convex/email/`, `src/routes/_app/` etc.
-  //    A trailing `/` or `*` or `)` signals the end of a directory reference.
-  const directoryRegex =
-    /\b(?:convex|src|tests|\.claude\/hooks)(?:\/[A-Za-z0-9_\-]+)+\/(?=[*\s)"`'\]])/g;
-  for (const match of text.matchAll(directoryRegex)) {
-    const raw = match[0].replace(/\/$/, "");
-    if (IGNORED_PATH_FRAGMENTS.some((frag) => raw.includes(frag))) continue;
-    directories.add(raw);
-  }
-
-  return { fullPaths, basenames, directories };
-}
-
-// ── Diagram scanning ────────────────────────────────────────────────
-
-export interface DiagramWatchMap {
-  byFullPath: Map<string, Set<string>>;
-  byBasename: Map<string, Set<string>>;
-  byDirectory: Map<string, Set<string>>;
-  diagramFiles: string[];
+  return paths;
 }
 
 /**
- * Scan every `*.md` file in the diagram directory and build a reverse
- * index from referenced path → set of diagrams that mention it.
+ * Scan every `*.md` file in the diagrams directory and return a map
+ * from diagram filename (e.g. "greybox.md") to its extracted watched
+ * paths. Missing directory returns an empty map.
  */
-export function scanDiagrams(diagramDir: string): DiagramWatchMap {
-  const map: DiagramWatchMap = {
-    byFullPath: new Map(),
-    byBasename: new Map(),
-    byDirectory: new Map(),
-    diagramFiles: [],
-  };
-
+export function scanAllDiagrams(
+  diagramDir: string,
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
   let entries;
   try {
     entries = readdirSync(diagramDir, { withFileTypes: true });
   } catch {
     return map;
   }
-
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-    const diagramName = entry.name;
-    map.diagramFiles.push(diagramName);
-
-    let text: string;
+    let content: string;
     try {
-      text = readFileSync(join(diagramDir, diagramName), "utf-8");
+      content = readFileSync(join(diagramDir, entry.name), "utf-8");
     } catch {
       continue;
     }
-
-    const refs = extractReferences(text);
-
-    for (const p of refs.fullPaths) {
-      addToMap(map.byFullPath, p, diagramName);
-    }
-    for (const b of refs.basenames) {
-      addToMap(map.byBasename, b, diagramName);
-    }
-    for (const d of refs.directories) {
-      addToMap(map.byDirectory, d, diagramName);
-    }
+    map.set(entry.name, extractWatchedPaths(content));
   }
-
   return map;
 }
 
-function addToMap(
-  m: Map<string, Set<string>>,
-  key: string,
-  value: string
-): void {
-  const existing = m.get(key);
-  if (existing) {
-    existing.add(value);
-  } else {
-    m.set(key, new Set([value]));
-  }
+/**
+ * True iff `changedFile` equals `watched` exactly, or `watched` is a
+ * directory prefix of `changedFile`. Both paths should be relative to
+ * the project root and already normalized (no trailing slashes).
+ */
+export function matchesWatchedPath(
+  changedFile: string,
+  watched: string,
+): boolean {
+  if (changedFile === watched) return true;
+  return changedFile.startsWith(watched + "/");
 }
 
-// ── Matching changed files → affected diagrams ──────────────────────
-
-export interface MatchResult {
-  /** Diagram basenames (`auth-flow.md`, …) that need updating. */
-  affected: Set<string>;
-  /** Changed files inside a watched tree that matched no diagram at all. */
-  unmatched: string[];
-}
-
+/**
+ * True iff `relPath` lives inside one of the watched tree roots.
+ * Used by the Layer 2 catch-all to decide whether an unmatched
+ * changed file is worth flagging for documentation coverage.
+ */
 export function isSourceTreeFile(relPath: string): boolean {
   return WATCHED_TREE_ROOTS.some((root) => relPath.startsWith(root));
 }
 
+export interface ResolveResult {
+  /** Diagram filenames (`auth-flow.md`, …) that reference at least
+   *  one of the changed files (directly or via a parent directory). */
+  affected: string[];
+  /** Changed files that matched no diagram at all. The caller filters
+   *  these to the ones inside watched tree roots to decide whether
+   *  Layer 2 (gap-fill) should fire. */
+  unmatched: string[];
+}
+
 /**
- * For each changed file, determine which diagrams reference it via:
- *   1. Exact full-path match
- *   2. Basename match (only for files inside a watched tree root)
- *   3. Ancestor-directory match
- *
- * Returns both the set of affected diagrams and the list of "in-tree but
- * unmatched" files that Layer 2 should use to spawn a gap-fill sub-Claude.
+ * For a given list of changed files, return the set of diagrams that
+ * reference at least one of them. Also returns the set of changed
+ * files that were NOT matched by any diagram — the caller uses that
+ * list (after filtering to in-tree files) to trigger Layer 2.
  */
-export function matchChangedFiles(
-  changedRelPaths: string[],
-  map: DiagramWatchMap
-): MatchResult {
+export function resolveAffectedDiagrams(
+  changedFiles: string[],
+  diagramWatches: Map<string, Set<string>>,
+): ResolveResult {
   const affected = new Set<string>();
-  const unmatched: string[] = [];
+  const matchedFiles = new Set<string>();
 
-  for (const rel of changedRelPaths) {
-    if (IGNORED_PATH_FRAGMENTS.some((frag) => rel.includes(frag))) continue;
-
-    const hits = new Set<string>();
-
-    // 1. Exact full-path match.
-    const exact = map.byFullPath.get(rel);
-    if (exact) for (const d of exact) hits.add(d);
-
-    // 2. Basename match (only inside watched trees).
-    const inTree = isSourceTreeFile(rel);
-    if (inTree) {
-      const base = basename(rel);
-      if (!BASENAME_DENYLIST.has(base)) {
-        const byBase = map.byBasename.get(base);
-        if (byBase) for (const d of byBase) hits.add(d);
+  for (const [diagram, watches] of diagramWatches) {
+    for (const file of changedFiles) {
+      for (const watch of watches) {
+        if (matchesWatchedPath(file, watch)) {
+          affected.add(diagram);
+          matchedFiles.add(file);
+          break;
+        }
       }
-    }
-
-    // 3. Ancestor-directory match — walk up from the file's dirname.
-    let cursor = dirname(rel);
-    const seen = new Set<string>();
-    while (cursor && cursor !== "." && cursor !== "/" && !seen.has(cursor)) {
-      seen.add(cursor);
-      const byDir = map.byDirectory.get(cursor);
-      if (byDir) for (const d of byDir) hits.add(d);
-      const next = dirname(cursor);
-      if (next === cursor) break;
-      cursor = next;
-    }
-
-    if (hits.size === 0) {
-      if (inTree) unmatched.push(rel);
-    } else {
-      for (const d of hits) affected.add(d);
     }
   }
 
-  return { affected, unmatched };
+  const unmatched = changedFiles.filter((f) => !matchedFiles.has(f));
+  return {
+    affected: Array.from(affected).sort(),
+    unmatched,
+  };
+}
+
+/**
+ * Normalize an absolute file path to a project-root-relative path.
+ * The Stop hook's transcript parser emits absolute paths, so this is
+ * called on every changed file before matching.
+ */
+export function relativize(absPath: string, cwd: string): string {
+  if (absPath.startsWith(cwd + "/")) return absPath.slice(cwd.length + 1);
+  if (absPath === cwd) return "";
+  return absPath;
 }
