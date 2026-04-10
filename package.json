@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
+    "start": "node server-node.mjs",
     "deploy": "wrangler deploy",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
