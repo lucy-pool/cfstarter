@@ -30,7 +30,12 @@ export default defineConfig(({ mode }) => {
       ],
     },
     ssr: {
-      noExternal: ["@convex-dev/better-auth", "tailwindcss"],
+      // Bundle ALL dependencies into the SSR build so dist/server/server.js
+      // is self-contained and the runtime container doesn't need a populated
+      // node_modules. Cloudflare Workers always required this; the VPS
+      // (Node) target now uses the same bundle so the Dockerfile runner
+      // stage only needs to copy dist/ + server-node.mjs.
+      noExternal: true,
     },
   };
 });
