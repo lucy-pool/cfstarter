@@ -4,7 +4,7 @@
 #
 # Fires when `git commit ...` is about to run AND any of:
 #   (a) the Stop hook's sub-Claude updater was spawned recently
-#       (lock file `/tmp/lucystarter-diagram-update.lock` is fresh)
+#       (lock file `.claude/hooks/.diagram-update.lock` is fresh)
 #   (b) memory/ai/diagrams/ has unstaged changes
 #   (c) CLAUDE.md has unstaged changes
 #
@@ -15,19 +15,10 @@
 #
 # NOTE: We deliberately do NOT use `pgrep -f 'claude -p'` to detect
 # a running updater. That pattern matches sub-Claudes from OTHER
-# projects on the same machine (e.g. a sibling weatherbot project),
-# producing cross-project false positives. The lock file path is
-# hardcoded per-project, so its mtime is an unambiguous signal.
+# projects on the same machine, producing cross-project false positives.
+# The lock file is project-local, so its mtime is an unambiguous signal.
 
-INPUT=$(cat)
-
-# Parse the command field from the tool input JSON. Use jq if
-# available (robust), fall back to grep/sed otherwise.
-if command -v jq >/dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
-else
-  COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
-fi
+COMMAND=$(jq -r '.tool_input.command // empty')
 
 # Only act on `git commit ...`, not git commit-tree or similar.
 case "$COMMAND" in
@@ -36,7 +27,7 @@ case "$COMMAND" in
 esac
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-LOCK_FILE="/tmp/lucystarter-diagram-update.lock"
+LOCK_FILE="$PROJECT_ROOT/.claude/hooks/.diagram-update.lock"
 LOCK_MAX_AGE=180  # seconds — sub-Claude typically takes 30-120s
 
 WARNINGS=""
@@ -75,7 +66,7 @@ fi
 if [ -n "$WARNINGS" ]; then
   echo "" >&2
   echo "⚠ Documentation sync warning (commit is NOT blocked):" >&2
-  echo -e "$WARNINGS" >&2
+  printf "%b\n" "$WARNINGS" >&2
   echo "" >&2
   echo "  Options:" >&2
   echo "    • Wait ~30s for the updater to finish, then re-run the commit" >&2

@@ -15,31 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-file-reading.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-file-editing.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-content-search.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-file-search.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-npm-yarn.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-no-verify.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/block-destructive.sh"
+            "command": "bash .claude/hooks/block-commands.sh"
           },
           {
             "type": "command",
@@ -55,11 +31,33 @@
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-diagrams.sh"
+            "command": "bun run .claude/hooks/check-diagrams.ts"
           },
           {
             "type": "command",
             "command": "bash .claude/hooks/check-docs-sync.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run .claude/hooks/convex-query-lint.ts",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bun run .claude/hooks/convex-schema-lint.ts",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bun run .claude/hooks/convex-node-lint.ts",
+            "timeout": 10
           }
         ]
       }

@@ -216,17 +216,11 @@ function checkClientImportsInConvex(cwd: string): string[] {
   return errors;
 }
 
-// ── MCP error check (no-op — Next.js MCP removed after TanStack Start migration) ─
-
-async function checkNextJsMcpErrors(_cwd: string): Promise<string | null> {
-  // Next.js MCP endpoint no longer exists (migrated to TanStack Start)
-  return null;
-}
 
 // ── Diagram maintenance ─────────────────────────────────────────────
 
 const DIAGRAM_DIR = "memory/ai/diagrams";
-const DIAGRAM_LOCK_FILE = "/tmp/lucystarter-diagram-update.lock";
+const DIAGRAM_LOCK_FILE = join(import.meta.dir, ".diagram-update.lock");
 const DEBOUNCE_SECONDS = 30;
 
 function isDiagramUpdateDebounced(): boolean {
@@ -234,7 +228,21 @@ function isDiagramUpdateDebounced(): boolean {
     if (!existsSync(DIAGRAM_LOCK_FILE)) return false;
     const stat = statSync(DIAGRAM_LOCK_FILE);
     const ageSeconds = (Date.now() - stat.mtimeMs) / 1000;
-    return ageSeconds < DEBOUNCE_SECONDS;
+    if (ageSeconds >= DEBOUNCE_SECONDS) return false;
+
+    // If the PID in the lock file is still alive, an updater is running.
+    // If it died, allow a new one despite the debounce.
+    const pid = parseInt(readFileSync(DIAGRAM_LOCK_FILE, "utf-8").trim(), 10);
+    if (!isNaN(pid)) {
+      try {
+        process.kill(pid, 0); // signal 0 = check if process exists
+        return true; // process alive → debounce
+      } catch {
+        return false; // process dead → allow new spawn
+      }
+    }
+
+    return true; // no valid PID → respect mtime debounce
   } catch {
     return false;
   }
@@ -359,7 +367,8 @@ async function main() {
   if (changedFiles.length === 0) return;
 
   // --- Check 0: Run tests ---
-  const hasTestChanges = changedFiles.some((f) => f.includes("convex/"));
+  const convexDir = join(input.cwd, "convex");
+  const hasTestChanges = changedFiles.some((f) => f.startsWith(convexDir + "/"));
   if (hasTestChanges) {
     console.error("Running tests...");
     const testResult = await runCommand("bun", ["run", "test"], input.cwd);
@@ -408,14 +417,6 @@ async function main() {
     block(
       `Client-only packages imported in server-side Convex code. Please remove them:\n${clientImports.join("\n")}`
     );
-    return;
-  }
-
-  // --- Check 5: Next.js MCP runtime errors ---
-  console.error("Checking Next.js MCP for runtime errors...");
-  const mcpErrors = await checkNextJsMcpErrors(input.cwd);
-  if (mcpErrors) {
-    block(`Next.js runtime errors detected via MCP:\n${mcpErrors}`);
     return;
   }
 

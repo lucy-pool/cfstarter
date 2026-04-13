@@ -1,7 +1,6 @@
 #!/bin/bash
 # Check required Convex environment variables before starting convex dev
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+COMMAND=$(jq -r '.tool_input.command // empty')
 
 # Only check when starting convex dev
 if ! echo "$COMMAND" | grep -qE 'convex\s+dev'; then
@@ -9,7 +8,15 @@ if ! echo "$COMMAND" | grep -qE 'convex\s+dev'; then
 fi
 
 # Fetch env vars from Convex (timeout after 10s)
-ENV_OUTPUT=$(timeout 10 bunx convex env ls 2>&1)
+# Use GNU timeout if available, otherwise fall back to perl one-liner (macOS)
+if command -v timeout >/dev/null 2>&1; then
+  ENV_OUTPUT=$(timeout 10 bunx convex env ls 2>&1)
+elif command -v gtimeout >/dev/null 2>&1; then
+  ENV_OUTPUT=$(gtimeout 10 bunx convex env ls 2>&1)
+else
+  # macOS fallback: run in background, kill after 10s if still running
+  ENV_OUTPUT=$(perl -e 'alarm 10; exec @ARGV' bunx convex env ls 2>&1)
+fi
 if [ $? -ne 0 ]; then
   echo "Warning: Could not fetch Convex env vars. Check your deployment connection." >&2
   echo "$ENV_OUTPUT" >&2

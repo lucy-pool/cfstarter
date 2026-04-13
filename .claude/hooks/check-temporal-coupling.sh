@@ -2,13 +2,11 @@
 # PreToolUse hook: warn about temporal coupling across module boundaries before git commit.
 # Non-blocking — prints warnings but allows the commit.
 
-# Read stdin (JSON with tool input)
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+COMMAND=$(jq -r '.tool_input.command // empty')
 
 # Only act on git commit commands
 case "$COMMAND" in
-  git\ commit*) ;;
+  "git commit"|"git commit "*) ;;
   *) exit 0 ;;
 esac
 

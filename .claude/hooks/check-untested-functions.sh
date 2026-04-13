@@ -1,41 +1,52 @@
 #!/bin/bash
 # PreToolUse hook: warn about untested Convex functions before git commit.
+# Only flags functions that are NEW or MODIFIED in staged files — not every
+# untested function in the entire codebase (which is too noisy to be useful).
 # Non-blocking — prints warnings but allows the commit.
 
-# Read stdin (JSON with tool input)
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+INPUT=$(jq -r '.tool_input.command // empty')
 
 # Only act on git commit commands
-case "$COMMAND" in
-  git\ commit*) ;;
+case "$INPUT" in
+  "git commit"|"git commit "*) ;;
   *) exit 0 ;;
 esac
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CONVEX_DIR="$PROJECT_ROOT/convex"
 
-# Collect exported Convex function names from source files (excluding tests and _generated)
-FUNCTIONS=$(find "$CONVEX_DIR" -name '*.ts' -not -path '*/_generated/*' -not -name '*.d.ts' \
-  | xargs grep -ohE 'export\s+const\s+\w+\s*=\s*(userQuery|userMutation|adminQuery|adminMutation|query|mutation|action|internalQuery|internalMutation|internalAction)\(' 2>/dev/null \
-  | sed -E 's/export[[:space:]]+const[[:space:]]+([[:alnum:]_]+)[[:space:]]*=.*/\1/')
+# Get staged convex/ files (only .ts, excluding _generated and schema)
+STAGED_CONVEX=$(cd "$PROJECT_ROOT" && git diff --cached --name-only -- 'convex/' 2>/dev/null \
+  | grep -E '\.tsx?$' \
+  | grep -v '_generated/' \
+  | grep -v '\.d\.ts$')
+
+[ -z "$STAGED_CONVEX" ] && exit 0
+
+# Extract function names from staged DIFFS (added/modified lines only).
+# This catches only new or changed exports, not every function in the file.
+FUNCTIONS=$(cd "$PROJECT_ROOT" && git diff --cached -U0 -- $STAGED_CONVEX 2>/dev/null \
+  | grep -E '^\+.*export\s+const\s+\w+\s*=\s*(userQuery|userMutation|adminQuery|adminMutation|query|mutation|action|internalQuery|internalMutation|internalAction)\(' \
+  | sed -E 's/^\+.*export[[:space:]]+const[[:space:]]+([[:alnum:]_]+)[[:space:]]*=.*/\1/' \
+  | sort -u)
 
 [ -z "$FUNCTIONS" ] && exit 0
 
-# Collect all test file content
-TEST_CONTENT=$(find "$PROJECT_ROOT/tests" -name '*.test.ts' -exec cat {} + 2>/dev/null)
-
-# Check each function for test references
+# Check each function against test files
+TEST_DIR="$PROJECT_ROOT/tests"
 WARNINGS=""
-while IFS= read -r fn; do
-  if ! echo "$TEST_CONTENT" | grep -q "\b$fn\b"; then
-    WARNINGS="$WARNINGS\n  - $fn"
-  fi
-done <<< "$FUNCTIONS"
+
+if [ -d "$TEST_DIR" ]; then
+  TEST_CONTENT=$(find "$TEST_DIR" -name '*.test.ts' -exec cat {} + 2>/dev/null)
+  while IFS= read -r fn; do
+    if ! echo "$TEST_CONTENT" | grep -q "\b$fn\b"; then
+      WARNINGS="$WARNINGS\n  - $fn"
+    fi
+  done <<< "$FUNCTIONS"
+fi
 
 if [ -n "$WARNINGS" ]; then
   echo "" >&2
-  echo "⚠ Untested Convex functions:$WARNINGS" >&2
+  echo "⚠ New/modified Convex functions without tests:$WARNINGS" >&2
   echo "  Consider adding tests in tests/convex/<service>/" >&2
   echo "" >&2
 fi

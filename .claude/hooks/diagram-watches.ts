@@ -35,10 +35,25 @@ export const WATCHED_TREE_ROOTS: readonly string[] = [
   ".claude/hooks/",
 ];
 
-// Used inside the path-extraction regex. Keep in sync with
-// WATCHED_TREE_ROOTS conceptually — any root that should participate
-// in the watch system must be listed here.
-const PATH_ROOTS_REGEX_FRAGMENT = "convex|src|tests|\\.claude/hooks";
+// Derived from WATCHED_TREE_ROOTS: strip trailing slashes, collapse
+// entries sharing a first segment (src/routes + src/lib → src),
+// escape regex special chars, and deduplicate.
+const PATH_ROOTS_REGEX_FRAGMENT = (() => {
+  const roots = WATCHED_TREE_ROOTS.map((r) => r.replace(/\/+$/, ""));
+  const byFirst = new Map<string, string[]>();
+  for (const r of roots) {
+    const first = r.split("/")[0];
+    if (!byFirst.has(first)) byFirst.set(first, []);
+    byFirst.get(first)!.push(r);
+  }
+  const collapsed: string[] = [];
+  for (const [first, entries] of byFirst) {
+    collapsed.push(entries.length > 1 ? first : entries[0]);
+  }
+  return collapsed
+    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+})();
 
 // Matches path-like strings that start with one of the watched roots:
 //
