@@ -15,27 +15,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-commands.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-commands.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-convex-env.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-convex-env.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-untested-functions.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-untested-functions.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-temporal-coupling.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-temporal-coupling.sh\""
           },
           {
             "type": "command",
-            "command": "bun run .claude/hooks/check-diagrams.ts"
+            "command": "bun run \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-diagrams.ts\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-docs-sync.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-docs-sync.sh\""
           }
         ]
       }
@@ -46,17 +46,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun run .claude/hooks/convex-query-lint.ts",
+            "command": "bun run \"$CLAUDE_PROJECT_DIR/.claude/hooks/convex-query-lint.ts\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bun run .claude/hooks/convex-schema-lint.ts",
+            "command": "bun run \"$CLAUDE_PROJECT_DIR/.claude/hooks/convex-schema-lint.ts\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bun run .claude/hooks/convex-node-lint.ts",
+            "command": "bun run \"$CLAUDE_PROJECT_DIR/.claude/hooks/convex-node-lint.ts\"",
             "timeout": 10
           }
         ]
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun run .claude/hooks/stop-hook.ts"
+            "command": "bun run \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-hook.ts\""
           }
         ]
       }
