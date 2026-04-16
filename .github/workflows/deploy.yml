@@ -1,0 +1,58 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  # One in-flight deploy per ref; don't cancel mid-deploy (wrangler + convex aren't idempotent).
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Resolve target
+        id: target
+        run: |
+          REPO="${GITHUB_REPOSITORY##*/}"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "script=$REPO"          >> "$GITHUB_OUTPUT"
+            echo "env_flag="              >> "$GITHUB_OUTPUT"
+          else
+            echo "script=${REPO}-acc"     >> "$GITHUB_OUTPUT"
+            echo "env_flag=--env acc"     >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push Convex + build Worker
+        env:
+          CONVEX_DEPLOY_KEY_PROD: ${{ secrets.CONVEX_DEPLOY_KEY_PROD }}
+          CONVEX_DEPLOY_KEY_ACC:  ${{ secrets.CONVEX_DEPLOY_KEY_ACC }}
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            export CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY_PROD"
+          else
+            export CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY_ACC"
+          fi
+          # `convex deploy` pushes functions, injects CONVEX_URL into the build env,
+          # then runs the build command so the Worker bundle embeds the URL.
+          bunx convex deploy --yes --cmd 'bun run build'
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler deploy ${{ steps.target.outputs.env_flag }} --name "${{ steps.target.outputs.script }}"
