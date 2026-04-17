@@ -47,23 +47,6 @@ for VAR in R2_BUCKET R2_ENDPOINT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
   fi
 done
 
-# OAuth — social login won't work
-for VAR in AUTH_GITHUB_ID AUTH_GITHUB_SECRET; do
-  if echo "$ENV_OUTPUT" | grep -q "^$VAR="; then
-    SET_OPTIONAL+=("$VAR (GitHub OAuth)")
-  else
-    MISSING_OPTIONAL+=("$VAR (GitHub OAuth)")
-  fi
-done
-
-for VAR in AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET; do
-  if echo "$ENV_OUTPUT" | grep -q "^$VAR="; then
-    SET_OPTIONAL+=("$VAR (Google OAuth)")
-  else
-    MISSING_OPTIONAL+=("$VAR (Google OAuth)")
-  fi
-done
-
 # AI — chat features won't work
 if echo "$ENV_OUTPUT" | grep -q "^OPENROUTER_API_KEY="; then
   SET_OPTIONAL+=("OPENROUTER_API_KEY (AI chat)")

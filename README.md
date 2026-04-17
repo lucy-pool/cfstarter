@@ -4,7 +4,7 @@ A production-ready starter for building full-stack apps with **Convex**, **TanSt
 
 ## What's Included
 
-- **Auth** — Email/password, GitHub OAuth, Google OAuth via Better Auth. Protected routes just work — anything under `_app/` requires authentication.
+- **Auth** — Email/password via Better Auth. Protected routes just work — anything under `_app/` requires authentication.
 - **Roles** — Defined once in `convex/schema.ts`. New users get `user`. Admins can promote. Add roles by editing one file.
 - **Email** — Full email service with Resend and SMTP providers, built-in templates (welcome, notification, etc.), custom template editor with visual and HTML modes.
 - **File uploads** — Browser-to-R2 direct upload via presigned URLs. Convex stores metadata only.
@@ -46,29 +46,6 @@ bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000), sign up with email/password, and you'll land on the dashboard.
-
-### Optional: GitHub OAuth
-
-1. Create a GitHub OAuth App at [github.com/settings/developers](https://github.com/settings/developers)
-   - Homepage URL: `http://localhost:3000`
-   - Callback URL: your Convex site URL + `/api/auth/callback/github` (find it with `bunx convex env get SITE_URL`)
-2. Set the env vars:
-
-```bash
-bunx convex env set AUTH_GITHUB_ID your-github-client-id
-bunx convex env set AUTH_GITHUB_SECRET your-github-client-secret
-```
-
-### Optional: Google OAuth
-
-1. Create credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   - Authorized redirect URI: your Convex site URL + `/api/auth/callback/google`
-2. Set the env vars:
-
-```bash
-bunx convex env set AUTH_GOOGLE_ID your-google-client-id
-bunx convex env set AUTH_GOOGLE_SECRET your-google-client-secret
-```
 
 ### Optional: Cloudflare R2 (file uploads)
 
@@ -131,7 +108,7 @@ bunx convex env set EMAIL_FROM "Your App <noreply@yourdomain.com>"
 ```
 convex/                          # Backend
   schema.ts                      # Tables, indexes, role + fileType validators
-  auth.ts                        # Better Auth config (Email/Password, GitHub, Google)
+  auth.ts                        # Better Auth config (Email/Password)
   auth.config.ts                 # Better Auth JWT config via @convex-dev/better-auth
   authHelpers.ts                 # Auth guards (requireAuth, requireAdmin, hasRole)
   functions.ts                   # Custom builders (userQuery, userMutation, adminQuery, adminMutation)
@@ -161,8 +138,8 @@ src/
 src/routes/                      # Frontend (TanStack Router, file-based)
   __root.tsx                     # Root layout: ConvexProvider, ThemeProvider, SSR auth
   index.tsx                      # Landing page (/)
-  signin.tsx                     # Sign-in (Email/Password + OAuth)
-  signup.tsx                     # Sign-up (Email/Password + OAuth)
+  signin.tsx                     # Sign-in (Email/Password)
+  signup.tsx                     # Sign-up (Email/Password)
   forgot-password.tsx            # Forgot password
   reset-password.tsx             # Reset password
   api/auth/$.ts                  # API catch-all — proxies Better Auth to Convex
@@ -328,10 +305,6 @@ If you don't want any of this, delete `.claude/hooks/stop-hook.ts` or remove the
 | `VITE_SITE_URL` | `.env.local` | Frontend URL (e.g. `http://localhost:3000`) |
 | `BETTER_AUTH_SECRET` | Convex dashboard | Secret for Better Auth session signing |
 | `SITE_URL` | Convex dashboard | Better Auth base URL |
-| `AUTH_GITHUB_ID` | Convex dashboard | GitHub OAuth client ID |
-| `AUTH_GITHUB_SECRET` | Convex dashboard | GitHub OAuth client secret |
-| `AUTH_GOOGLE_ID` | Convex dashboard | Google OAuth client ID |
-| `AUTH_GOOGLE_SECRET` | Convex dashboard | Google OAuth client secret |
 | `R2_ENDPOINT` | Convex dashboard | Cloudflare R2 S3-compatible endpoint |
 | `R2_ACCESS_KEY_ID` | Convex dashboard | R2 API token access key |
 | `R2_SECRET_ACCESS_KEY` | Convex dashboard | R2 API token secret |
@@ -350,7 +323,6 @@ If you don't want any of this, delete `.claude/hooks/stop-hook.ts` or remove the
 | Problem | Fix |
 |---------|-----|
 | Auth not working after sign-up | Check `BETTER_AUTH_SECRET` and `SITE_URL` in Convex dashboard |
-| OAuth redirect errors | Verify callback URLs match your Convex site URL |
 | File uploads failing | Check all 4 R2 env vars and CORS on the bucket |
 | AI chat error | Verify `OPENROUTER_API_KEY` is set |
 | `bunx convex dev` won't start | Run `bun install` first, ensure you're logged in |

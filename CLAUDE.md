@@ -7,7 +7,7 @@
 | Frontend | TanStack Start (Vite, file-based routing, Selective SSR) |
 | Hosting | Cloudflare Workers (Selective SSR, ~0ms cold starts) |
 | Router | TanStack Router |
-| Auth | Better Auth (`@convex-dev/better-auth` — Email/Password, GitHub, Google OAuth) |
+| Auth | Better Auth (`@convex-dev/better-auth` — Email/Password) |
 | UI | shadcn/ui + Tailwind CSS |
 | Object Storage | Cloudflare R2 via `@convex-dev/r2` (presigned URLs, direct browser upload) |
 | AI / LLMs | OpenRouter (OpenAI-compatible chat completions) |
@@ -70,8 +70,8 @@ src/
 src/routes/                      # Frontend (file-based routing via TanStack Router)
   __root.tsx                     # Root layout: ConvexProvider, ThemeProvider, Toaster
   index.tsx                      # Landing page (/)
-  signin.tsx                     # Sign-in (Email/Password + OAuth)
-  signup.tsx                     # Sign-up (Email/Password + OAuth)
+  signin.tsx                     # Sign-in (Email/Password)
+  signup.tsx                     # Sign-up (Email/Password)
   forgot-password.tsx            # Forgot password
   reset-password.tsx             # Reset password
   _app.tsx                       # Auth-gated layout (redirects to /signin if unauthenticated)
@@ -316,8 +316,6 @@ SSR routes get `beforeLoad` token from the server, so authenticated SSR works au
 | `VITE_SITE_URL` | `.env.local` | Frontend URL (e.g. `http://localhost:3000`) |
 | `BETTER_AUTH_SECRET` | Convex dashboard | Secret for Better Auth session signing |
 | `SITE_URL` | Convex dashboard | Backend base URL for Better Auth |
-| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | Convex dashboard | GitHub OAuth credentials |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Convex dashboard | Google OAuth credentials |
 | `CONVEX_SITE_URL` | Cloudflare Workers env | Auth proxy target (server function) |
 
 ## Test Accounts
@@ -339,6 +337,5 @@ If login fails (account doesn't exist), create it via `/signup` with the exact c
 **Important:**
 - Dev/local only. Never use these in production.
 - Better Auth email/password provider does not require email verification — signup is instant.
-- OAuth (GitHub, Google) is available but not used for shared test accounts.
 - After a migration, test accounts may need to be recreated via `/signup`.
 
