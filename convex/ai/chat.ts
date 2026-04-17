@@ -12,6 +12,16 @@ interface ChatMessage {
   content: string;
 }
 
+interface OpenRouterResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  model?: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 /** Send a chat completion request to OpenRouter. */
 export const chat = action({
   args: {
@@ -74,7 +84,7 @@ export const chat = action({
       throw new Error(`OpenRouter API error (${response.status}): ${error}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OpenRouterResponse;
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
